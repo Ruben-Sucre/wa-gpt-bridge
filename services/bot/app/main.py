@@ -1,8 +1,16 @@
 import os
+import logging
 from pathlib import Path
 from fastapi import FastAPI, Request, Header, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -49,37 +57,48 @@ async def health():
 async def whatsapp_webhook(payload: IncomingWhatsApp, x_bot_secret: str | None = Header(None)):
     secret = os.getenv("BOT_SECRET")
     if secret and x_bot_secret != secret:
+        logger.warning(f"Unauthorized access attempt from {payload.from_number}")
         raise HTTPException(status_code=401, detail="invalid secret")
 
     sender = payload.from_number
-    text = payload.text
-    text = clean_text(text)
+    text = clean_text(payload.text)
 
-    # Assemble context
-    history = await memory.get_conversation(sender)
+    logger.info(f"Processing message from {sender}. Provider: {LLM_PROVIDER}")
 
-    # Save user message to Redis
-    await memory.append_message(sender, "user", text)
-
-    # Build messages payload with system prompt
-    messages = []
-    if SYSTEM_PROMPT:
-        messages.append({"role": "system", "content": SYSTEM_PROMPT})
-    messages.extend(history)
-    messages.append({"role": "user", "content": text})
-
-    # Call OpenAI
-    resp = await llm_client.chat(messages)
-    assistant_text = resp.strip()
-
-    # Save assistant response
-    await memory.append_message(sender, "assistant", assistant_text)
-
-    # Optionally send directly via Meta
     try:
-        await whatsapp_client.send_text_message(sender, assistant_text)
-    except Exception:
-        # Let n8n or caller handle delivery if direct send fails
-        return WebhookResponse(delivered=False, detail="queued")
+        # 1. Assemble context
+        history = await memory.get_conversation(sender)
 
-    return WebhookResponse(delivered=True)
+        # 2. Save user message to Redis
+        await memory.append_message(sender, "user", text)
+
+        # 3. Build messages payload
+        messages = []
+        if SYSTEM_PROMPT:
+            messages.append({"role": "system", "content": SYSTEM_PROMPT})
+        
+        messages.extend(history)
+        messages.append({"role": "user", "content": text})
+
+        # 4. Call LLM
+        logger.debug(f"Sending {len(messages)} messages to {LLM_PROVIDER}...")
+        resp = await llm_client.chat(messages)
+        assistant_text = resp.strip()
+        logger.info(f"Generated response for {sender} ({len(assistant_text)} chars)")
+
+        # 5. Save assistant response
+        await memory.append_message(sender, "assistant", assistant_text)
+
+        # 6. Send directly via WhatsApp
+        try:
+            await whatsapp_client.send_text_message(sender, assistant_text)
+        except Exception as send_err:
+            logger.warning(f"Failed to send WhatsApp message to {sender}: {send_err}")
+            return WebhookResponse(delivered=False, detail="LLM OK, WhatsApp send failed")
+        
+        return WebhookResponse(delivered=True)
+
+    except Exception as e:
+        logger.error(f"Error processing message for {sender}: {str(e)}", exc_info=True)
+        # Return partial failure so n8n or the caller knows it failed but doesn't crash 500
+        return WebhookResponse(delivered=False, detail=f"Processing failed: {str(e)}")
