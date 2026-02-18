@@ -1,0 +1,85 @@
+{
+  "name": "WhatsApp → OpenAI (FastAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "webhook/whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "wa-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$resumeWebhookUrl}}",
+              "operation": "contains",
+              "value2": "hub.mode"
+            }
+          ]
+        }
+      },
+      "name": "Is Verification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$parameter[\"query\"][\"hub.challenge\"]}}",
+        "options": {}
+      },
+      "name": "Respond Verification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://bot:8000/webhook/whatsapp",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify({\"from\": $json.entry[0].changes[0].value.messages[0].from, \"text\": $json.entry[0].changes[0].value.messages[0].text.body}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Send to Bot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"ok\"}",
+        "options": {}
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{"node": "Is Verification?", "type": "main", "index": 0}]]
+    },
+    "Is Verification?": {
+      "main": [
+        [{"node": "Respond Verification", "type": "main", "index": 0}],
+        [{"node": "Send to Bot", "type": "main", "index": 0}]
+      ]
+    },
+    "Send to Bot": {
+      "main": [[{"node": "Respond OK", "type": "main", "index": 0}]]
+    }
+  }
+}
