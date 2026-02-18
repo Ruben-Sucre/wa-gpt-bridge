@@ -11,6 +11,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+# Prevent httpx from logging full URLs (which may contain credentials)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 load_dotenv()
 

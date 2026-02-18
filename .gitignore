@@ -31,9 +31,10 @@ htmlcov/
 local_settings.py
 db.sqlite3
 
-# Environment variables
+# Environment variables (ignora secretos, pero trackea el ejemplo)
 .env
 .env.*
+!.env.example
 
 # IDEs and editors
 .idea/
@@ -48,10 +49,7 @@ db.sqlite3
 
 # Redis data (if accidentally created locally)
 /redis-data/
-.vscode
 debug.log
-wa-gpt-bridge/.env
-watch -n 30gpt-bridge/.env.example
 *.db
 *.sqlite
 *.sqlite3

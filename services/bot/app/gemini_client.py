@@ -7,7 +7,7 @@ import httpx
 class GeminiClient:
     def __init__(self, api_key: str | None = None, model: str | None = None, base_url: str | None = None):
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
         self.base_url = base_url or os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta")
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY is required for Gemini provider")
@@ -40,9 +40,14 @@ class GeminiClient:
         if system_parts:
             payload["system_instruction"] = {"parts": [{"text": "\n".join(system_parts)}]}
 
-        url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
+        # Pass key as header to avoid exposing it in URLs/logs
+        url = f"{self.base_url}/models/{self.model}:generateContent"
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 
