@@ -10,10 +10,13 @@ from .validation import IncomingWhatsApp
 from .cleaner import clean_text
 from .memory import ConversationMemory
 from .openai_client import OpenAIClient
+from .gemini_client import GeminiClient
 from .whatsapp_client import WhatsAppClient
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
 
 # Load system prompt
 PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "system_prompt.txt"
@@ -22,8 +25,14 @@ SYSTEM_PROMPT = PROMPT_PATH.read_text(encoding="utf-8").strip() if PROMPT_PATH.e
 app = FastAPI(title="wa-gpt-bridge-bot")
 
 memory = ConversationMemory(REDIS_URL)
-openai_client = OpenAIClient(api_key=os.getenv("OPENAI_API_KEY"), model=OPENAI_MODEL)
 whatsapp_client = WhatsAppClient(token=os.getenv("WHATSAPP_TOKEN"), phone_id=os.getenv("WHATSAPP_PHONE_ID"))
+
+if LLM_PROVIDER == "gemini":
+    llm_client = GeminiClient(api_key=os.getenv("GOOGLE_API_KEY"), model=GEMINI_MODEL)
+elif LLM_PROVIDER == "openai":
+    llm_client = OpenAIClient(api_key=os.getenv("OPENAI_API_KEY"), model=OPENAI_MODEL)
+else:
+    raise ValueError("Unsupported LLM_PROVIDER; use 'openai' or 'gemini'")
 
 
 class WebhookResponse(BaseModel):
@@ -60,7 +69,7 @@ async def whatsapp_webhook(payload: IncomingWhatsApp, x_bot_secret: str | None =
     messages.append({"role": "user", "content": text})
 
     # Call OpenAI
-    resp = await openai_client.chat(messages)
+    resp = await llm_client.chat(messages)
     assistant_text = resp.strip()
 
     # Save assistant response

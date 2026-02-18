@@ -47,6 +47,7 @@
         "url": "http://bot:8000/webhook/whatsapp",
         "jsonParameters": true,
         "bodyParametersJson": "={{ JSON.stringify({\"from\": $json.entry[0].changes[0].value.messages[0].from, \"text\": $json.entry[0].changes[0].value.messages[0].text.body}) }}",
+        "headerParametersJson": "={\"x-bot-secret\": $env.BOT_SECRET}",
         "options": {
           "timeout": 30000
         }

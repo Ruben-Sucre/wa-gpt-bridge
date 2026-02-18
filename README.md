@@ -24,6 +24,7 @@ Usuario WhatsApp → Meta WhatsApp Cloud API → n8n Webhook
 - ✅ Limpieza de texto y sanitización
 - ✅ Autenticación con header `x-bot-secret`
 - ✅ Envío directo a WhatsApp Cloud API desde FastAPI
+- ✅ Selector de LLM por variable de entorno (OpenAI o Gemini 1.5 Flash)
 
 ## Quick Start
 
@@ -32,6 +33,11 @@ Usuario WhatsApp → Meta WhatsApp Cloud API → n8n Webhook
 ```bash
 cp .env.example .env
 # Edita .env y configura tus API keys
+# LLM_PROVIDER=openai|gemini
+# OPENAI_API_KEY=... (si usas OpenAI)
+# OPENAI_MODEL=gpt-4o
+# GOOGLE_API_KEY=... (si usas Gemini)
+# GEMINI_MODEL=gemini-1.5-flash
 ```
 
 ### 2. Levantar servicios con Docker Compose
@@ -120,12 +126,18 @@ Procesa mensajes de WhatsApp.
 
 Edita `services/bot/prompts/system_prompt.txt` para cambiar el comportamiento del asistente.
 
-### Ajustar parámetros de OpenAI
+### Elegir proveedor LLM
 
-En `services/bot/app/openai_client.py`:
+- Define `LLM_PROVIDER=openai` o `LLM_PROVIDER=gemini` en `.env`.
+- OpenAI usa `OPENAI_API_KEY` y `OPENAI_MODEL` (default: gpt-4o).
+- Gemini usa `GOOGLE_API_KEY` y `GEMINI_MODEL` (default: gemini-1.5-flash).
+
+### Ajustar parámetros de generación
+
+En los clientes (`services/bot/app/openai_client.py` y `services/bot/app/gemini_client.py`):
 - `temperature`: Creatividad (0.0-2.0, default: 0.2)
-- `max_tokens`: Longitud máxima de respuesta (default: 800)
-- `model`: Modelo a usar (configurable en `.env`, default: gpt-4o)
+- `max_tokens`/`maxOutputTokens`: Longitud máxima de respuesta (default: 800)
+- `model`: Modelo a usar según proveedor
 
 ### TTL de conversación
 

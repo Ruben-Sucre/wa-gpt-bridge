@@ -48,3 +48,10 @@ db.sqlite3
 
 # Redis data (if accidentally created locally)
 /redis-data/
+.vscode
+debug.log
+wa-gpt-bridge/.env
+watch -n 30gpt-bridge/.env.example
+*.db
+*.sqlite
+*.sqlite3
