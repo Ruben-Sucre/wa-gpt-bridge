@@ -1,6 +1,9 @@
 import os
+import logging
 import httpx
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIClient:
@@ -24,5 +27,9 @@ class OpenAIClient:
             data = r.json()
             # best-effort extraction
             if "choices" in data and len(data["choices"]) > 0:
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"]["content"]
+                if not content:
+                    logger.warning("OpenAI returned empty content")
+                return content or ""
+            logger.warning(f"OpenAI unexpected response structure: {data}")
             return ""

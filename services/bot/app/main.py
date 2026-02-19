@@ -2,8 +2,11 @@ import os
 import logging
 from pathlib import Path
 from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -13,8 +16,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 # Prevent httpx from logging full URLs (which may contain credentials)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-load_dotenv()
 
 from .validation import IncomingWhatsApp
 from .cleaner import clean_text
@@ -26,8 +27,9 @@ from .rate_limiter import RateLimiter
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
+BOT_SECRET = os.getenv("BOT_SECRET")
 
 # Load system prompt
 PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "system_prompt.txt"
@@ -68,14 +70,14 @@ async def health():
     redis_ok = await memory.ping()
     status["checks"]["redis"] = "ok" if redis_ok else "failed"
     
-    # Check WhatsApp credentials configuration
-    whatsapp_token = os.getenv("WHATSAPP_TOKEN", "")
-    whatsapp_phone_id = os.getenv("WHATSAPP_PHONE_ID", "")
+    # Check WhatsApp credentials configuration using already-loaded client
+    wa_token = whatsapp_client.token or ""
+    wa_phone = whatsapp_client.phone_id or ""
     whatsapp_configured = (
-        whatsapp_token and 
-        whatsapp_phone_id and 
-        not whatsapp_token.startswith("EAA_PEGA") and
-        not whatsapp_phone_id.startswith("TU_PHONE")
+        bool(wa_token) and
+        bool(wa_phone) and
+        not wa_token.startswith("EAA_PEGA") and
+        not wa_phone.startswith("TU_PHONE")
     )
     status["checks"]["whatsapp_credentials"] = "ok" if whatsapp_configured else "not_configured"
     
@@ -95,15 +97,12 @@ async def whatsapp_verify(request: Request):
     token = params.get("hub.verify_token")
     logger.info(f"Webhook verification: mode={mode} token={token}")
     if mode == "subscribe" and challenge:
-        from fastapi.responses import PlainTextResponse
         return PlainTextResponse(content=challenge, status_code=200)
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
 @app.post("/webhook/whatsapp", response_model=WebhookResponse)
 async def whatsapp_webhook(request: Request, x_bot_secret: str | None = Header(None)):
-    secret = os.getenv("BOT_SECRET")
-
     # Parse raw body — Meta sends nested payload, internal callers send simple one
     try:
         body = await request.json()
@@ -126,7 +125,7 @@ async def whatsapp_webhook(request: Request, x_bot_secret: str | None = Header(N
             return WebhookResponse(delivered=False, detail="not a message event")
     else:
         # Internal format from n8n or tests: {"from": "...", "text": "..."}
-        if secret and x_bot_secret != secret:
+        if BOT_SECRET and x_bot_secret != BOT_SECRET:
             logger.warning("Unauthorized access attempt")
             raise HTTPException(status_code=401, detail="invalid secret")
         try:

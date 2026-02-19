@@ -44,6 +44,8 @@ def app_client(mocker):
 
     # Mockear WhatsApp client
     mock_wa = MagicMock()
+    mock_wa.token = "test-token"
+    mock_wa.phone_id = "123456789"
     mock_wa.send_text_message = AsyncMock(return_value={"messages": [{"id": "wamid.test"}]})
     mocker.patch("app.main.whatsapp_client", mock_wa)
 

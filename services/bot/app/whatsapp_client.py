@@ -5,6 +5,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+WHATSAPP_API_VERSION = "v21.0"
+
+
 class WhatsAppClient:
     def __init__(self, token: str | None = None, phone_id: str | None = None):
         self.token = token or os.getenv("WHATSAPP_TOKEN")
@@ -14,7 +17,7 @@ class WhatsAppClient:
     async def send_text_message(self, to: str, text: str) -> dict:
         if not self.token or not self.phone_id:
             raise RuntimeError("WhatsApp credentials not configured")
-        url = f"{self.base}/v17.0/{self.phone_id}/messages"
+        url = f"{self.base}/{WHATSAPP_API_VERSION}/{self.phone_id}/messages"
         headers = {"Authorization": f"Bearer {self.token}"}
         payload = {
             "messaging_product": "whatsapp",

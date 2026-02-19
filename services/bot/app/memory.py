@@ -33,9 +33,12 @@ class ConversationMemory:
         except Exception:
             return []
 
-    async def append_message(self, conv_id: str, role: str, content: str):
+    async def append_message(self, conv_id: str, role: str, content: str, max_messages: int = 20):
         conv = await self.get_conversation(conv_id)
         conv.append({"role": role, "content": content})
+        # Cap stored history to avoid unbounded Redis growth
+        if len(conv) > max_messages:
+            conv = conv[-max_messages:]
         await self._redis.set(f"conv:{conv_id}", json.dumps(conv), ex=self._ttl)
 
     async def clear(self, conv_id: str):

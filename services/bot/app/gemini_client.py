@@ -1,7 +1,10 @@
 import os
+import logging
 from typing import List
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
@@ -55,6 +58,10 @@ class GeminiClient:
         if candidates and len(candidates) > 0:
             parts = candidates[0].get("content", {}).get("parts", [])
             texts = [part.get("text", "") for part in parts if isinstance(part, dict)]
-            return "".join(texts).strip()
+            result = "".join(texts).strip()
+            if not result:
+                logger.warning("Gemini returned empty response")
+            return result
 
+        logger.warning(f"Gemini unexpected response structure: {data}")
         return ""
