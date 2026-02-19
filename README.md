@@ -2,6 +2,8 @@
 
 WhatsApp ↔ OpenAI chatbot con orquestación n8n usando FastAPI, Redis y Docker.
 
+> 📖 **Para deployment en producción, consulta la [Guía de Deployment](DEPLOYMENT.md)** con instrucciones detalladas de configuración, troubleshooting y monitoreo.
+
 ## Arquitectura
 
 - **n8n**: Orquestador de workflows (puerto 5678)
@@ -11,20 +13,55 @@ WhatsApp ↔ OpenAI chatbot con orquestación n8n usando FastAPI, Redis y Docker
 ## Flujo de Datos
 
 ```
-Usuario WhatsApp → Meta WhatsApp Cloud API → n8n Webhook
-  → FastAPI Bot (valida, limpia, consulta Redis, llama OpenAI, guarda respuesta)
+Usuario WhatsApp → Meta WhatsApp Cloud API → ngrok
+  → FastAPI Bot (valida, limpia, consulta Redis, llama Gemini/OpenAI, responde)
   → Meta WhatsApp Cloud API → Usuario WhatsApp
+```
+
+## Levantar el stack
+
+### Comando único (recomendado)
+
+```bash
+./start.sh
+```
+
+Este script hace **en orden**:
+1. `docker compose up -d` — levanta Redis y el Bot
+2. `ngrok http 8000 --domain=...` — expone el bot con dominio fijo
+
+> ⚠️ **Siempre usa `./start.sh`** en lugar de levantar docker y ngrok por separado.
+> ngrok debe apuntar al bot (`8000`), no a n8n (`5678`).
+
+### URL pública fija (no cambia)
+
+```
+https://agonisingly-unapprehended-vernice.ngrok-free.dev/webhook/whatsapp
+```
+
+Esta URL ya está configurada en Meta. No necesitas cambiarla nunca.
+
+### Token de WhatsApp (expira cada 24h en modo prueba)
+
+Cuando el bot deje de responder, renueva el token en Meta → WhatsApp → API Setup, actualiza `.env`:
+
+```bash
+# Edita .env y actualiza WHATSAPP_TOKEN=...
+docker compose up -d bot   # recarga el token sin bajar redis
 ```
 
 ## Características
 
 - ✅ System prompt cargado desde `services/bot/prompts/system_prompt.txt`
 - ✅ Historial conversacional persistente en Redis (TTL 24h)
+- ✅ **Límite de mensajes** - Solo últimos 20 mensajes para prevenir overflow de contexto
+- ✅ **Rate limiting** - Protección anti-spam (10 mensajes/minuto por usuario)
 - ✅ Validación de webhook de Meta (hub.challenge)
 - ✅ Limpieza de texto y sanitización
 - ✅ Autenticación con header `x-bot-secret`
+- ✅ **Health check mejorado** - Verifica Redis y credenciales de WhatsApp
 - ✅ Envío directo a WhatsApp Cloud API desde FastAPI
-- ✅ Selector de LLM por variable de entorno (OpenAI o Gemini 1.5 Flash)
+- ✅ Selector de LLM por variable de entorno (OpenAI o Gemini 2.0 Flash)
 
 ## Quick Start
 
@@ -94,9 +131,24 @@ wa-gpt-bridge/
 ## API Endpoints
 
 ### `GET /health`
-Health check del servicio.
+Health check del servicio con verificación de dependencias.
 
-**Respuesta**: `{"status": "ok"}`
+**Respuesta**:
+```json
+{
+  "status": "ok",
+  "llm_provider": "gemini",
+  "checks": {
+    "redis": "ok",
+    "whatsapp_credentials": "ok"
+  }
+}
+```
+
+**Estados posibles**:
+- `status`: `"ok"` (todo funcional) o `"degraded"` (Redis desconectado)
+- `checks.redis`: `"ok"` o `"failed"`
+- `checks.whatsapp_credentials`: `"ok"` o `"not_configured"`
 
 ### `POST /webhook/whatsapp`
 Procesa mensajes de WhatsApp.

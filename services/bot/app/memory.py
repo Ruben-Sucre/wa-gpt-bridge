@@ -9,12 +9,27 @@ class ConversationMemory:
         self._redis = Redis.from_url(redis_url)
         self._ttl = ttl
 
-    async def get_conversation(self, conv_id: str) -> List[dict]:
+    async def get_conversation(self, conv_id: str, max_messages: int = 20) -> List[dict]:
+        """
+        Retrieve conversation history for a given conversation ID.
+        
+        Args:
+            conv_id: Unique conversation identifier (typically phone number)
+            max_messages: Maximum number of messages to return (default 20).
+                         Returns the most recent messages to avoid context overflow.
+        
+        Returns:
+            List of message dictionaries with 'role' and 'content' keys
+        """
         raw = await self._redis.get(f"conv:{conv_id}")
         if not raw:
             return []
         try:
-            return json.loads(raw)
+            messages = json.loads(raw)
+            # Return only the last N messages to prevent context overflow and reduce costs
+            if len(messages) > max_messages:
+                return messages[-max_messages:]
+            return messages
         except Exception:
             return []
 
@@ -25,3 +40,15 @@ class ConversationMemory:
 
     async def clear(self, conv_id: str):
         await self._redis.delete(f"conv:{conv_id}")
+
+    async def ping(self) -> bool:
+        """
+        Check if Redis connection is healthy.
+        
+        Returns:
+            True if Redis responds to ping, False otherwise
+        """
+        try:
+            return await self._redis.ping()
+        except Exception:
+            return False

@@ -22,6 +22,7 @@ from .memory import ConversationMemory
 from .openai_client import OpenAIClient
 from .gemini_client import GeminiClient
 from .whatsapp_client import WhatsAppClient
+from .rate_limiter import RateLimiter
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -35,6 +36,7 @@ SYSTEM_PROMPT = PROMPT_PATH.read_text(encoding="utf-8").strip() if PROMPT_PATH.e
 app = FastAPI(title="wa-gpt-bridge-bot")
 
 memory = ConversationMemory(REDIS_URL)
+rate_limiter = RateLimiter(REDIS_URL, max_requests=10, window_seconds=60)
 whatsapp_client = WhatsAppClient(token=os.getenv("WHATSAPP_TOKEN"), phone_id=os.getenv("WHATSAPP_PHONE_ID"))
 
 if LLM_PROVIDER == "gemini":
@@ -52,18 +54,103 @@ class WebhookResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    """
+    Health check endpoint with dependency verification.
+    Returns detailed status of critical components.
+    """
+    status = {
+        "status": "ok",
+        "llm_provider": LLM_PROVIDER,
+        "checks": {}
+    }
+    
+    # Check Redis connectivity
+    redis_ok = await memory.ping()
+    status["checks"]["redis"] = "ok" if redis_ok else "failed"
+    
+    # Check WhatsApp credentials configuration
+    whatsapp_token = os.getenv("WHATSAPP_TOKEN", "")
+    whatsapp_phone_id = os.getenv("WHATSAPP_PHONE_ID", "")
+    whatsapp_configured = (
+        whatsapp_token and 
+        whatsapp_phone_id and 
+        not whatsapp_token.startswith("EAA_PEGA") and
+        not whatsapp_phone_id.startswith("TU_PHONE")
+    )
+    status["checks"]["whatsapp_credentials"] = "ok" if whatsapp_configured else "not_configured"
+    
+    # Overall health status
+    if not redis_ok:
+        status["status"] = "degraded"
+    
+    return status
+
+
+@app.get("/webhook/whatsapp")
+async def whatsapp_verify(request: Request):
+    """Meta webhook verification (hub.challenge handshake)."""
+    params = dict(request.query_params)
+    mode = params.get("hub.mode")
+    challenge = params.get("hub.challenge")
+    token = params.get("hub.verify_token")
+    logger.info(f"Webhook verification: mode={mode} token={token}")
+    if mode == "subscribe" and challenge:
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(content=challenge, status_code=200)
+    raise HTTPException(status_code=403, detail="Verification failed")
 
 
 @app.post("/webhook/whatsapp", response_model=WebhookResponse)
-async def whatsapp_webhook(payload: IncomingWhatsApp, x_bot_secret: str | None = Header(None)):
+async def whatsapp_webhook(request: Request, x_bot_secret: str | None = Header(None)):
     secret = os.getenv("BOT_SECRET")
-    if secret and x_bot_secret != secret:
-        logger.warning(f"Unauthorized access attempt from {payload.from_number}")
-        raise HTTPException(status_code=401, detail="invalid secret")
 
-    sender = payload.from_number
-    text = clean_text(payload.text)
+    # Parse raw body — Meta sends nested payload, internal callers send simple one
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+
+    # Detect Meta's native payload format
+    if "object" in body and "entry" in body:
+        try:
+            msg = body["entry"][0]["changes"][0]["value"]["messages"][0]
+            sender = msg["from"]
+            msg_type = msg.get("type", "")
+            if msg_type != "text":
+                logger.info(f"Ignoring non-text message type: {msg_type}")
+                return WebhookResponse(delivered=False, detail=f"unsupported type: {msg_type}")
+            text_body = msg["text"]["body"]
+        except (KeyError, IndexError, TypeError) as e:
+            # Could be a status update (delivery receipt, etc.) — ignore silently
+            logger.debug(f"Non-message webhook event ignored: {e}")
+            return WebhookResponse(delivered=False, detail="not a message event")
+    else:
+        # Internal format from n8n or tests: {"from": "...", "text": "..."}
+        if secret and x_bot_secret != secret:
+            logger.warning("Unauthorized access attempt")
+            raise HTTPException(status_code=401, detail="invalid secret")
+        try:
+            payload = IncomingWhatsApp(**body)
+            sender = payload.from_number
+            text_body = payload.text
+        except Exception:
+            raise HTTPException(status_code=422, detail="invalid payload")
+
+    text = clean_text(text_body)
+
+    # Rate limiting check
+    is_allowed, current_count, limit = await rate_limiter.check_rate_limit(sender)
+    if not is_allowed:
+        logger.warning(f"Rate limit exceeded for {sender}: {current_count}/{limit}")
+        rate_limit_msg = (
+            "Has alcanzado el límite de mensajes. "
+            f"Por favor espera un momento antes de enviar más mensajes. (Límite: {limit} mensajes por minuto)"
+        )
+        try:
+            await whatsapp_client.send_text_message(sender, rate_limit_msg)
+        except Exception:
+            pass  # Best effort notification
+        return WebhookResponse(delivered=False, detail="rate limit exceeded")
 
     logger.info(f"Processing message from {sender}. Provider: {LLM_PROVIDER}")
 

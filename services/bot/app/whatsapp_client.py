@@ -1,5 +1,8 @@
 import os
 import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class WhatsAppClient:
@@ -21,5 +24,7 @@ class WhatsAppClient:
         }
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(url, json=payload, headers=headers)
+            if not r.is_success:
+                logger.error(f"WhatsApp API error {r.status_code}: {r.text}")
             r.raise_for_status()
             return r.json()

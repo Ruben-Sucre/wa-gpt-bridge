@@ -34,6 +34,7 @@ services:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
       - WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
+      - BOT_SECRET=${BOT_SECRET}
     ports:
       - "5678:5678"
     volumes:

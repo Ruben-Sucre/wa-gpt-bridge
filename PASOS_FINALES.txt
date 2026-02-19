@@ -1,0 +1,157 @@
+═══════════════════════════════════════════════════════════════════
+  🚀 INTEGRACIÓN LISTA - ÚLTIMOS 2 PASOS
+═══════════════════════════════════════════════════════════════════
+
+✅ YA CONFIGURADO:
+  • Bot corriendo con todos los cambios aplicados
+  • Redis conectado y funcionando
+  • WhatsApp credentials OK
+  • Gemini API configurada
+  • ngrok exponiendo webhook públicamente
+
+📍 TU URL PÚBLICA DE NGROK:
+  https://agonisingly-unapprehended-vernice.ngrok-free.dev
+
+
+═══════════════════════════════════════════════════════════════════
+  PASO 1: IMPORTAR WORKFLOW EN n8n (2 minutos)
+═══════════════════════════════════════════════════════════════════
+
+1. Abre en tu navegador:
+   http://localhost:5678
+
+2. Login:
+   Usuario: admin
+   Password: ygk4nkeqF_8Q_uikkYl4DYBjJoRmC6E4
+
+3. En n8n:
+   • Clic en "Workflows" (menú izquierdo)
+   • Clic en el botón "+" o "Add Workflow"
+   • Clic en el menú ⋮ (arriba derecha)
+   • Selecciona "Import from File"
+   • Busca y selecciona:
+     /home/ruben/auto_python/wa-gpt-bridge/n8n/flows/wa-gpt-openai.json
+   • Clic en "Import"
+
+4. Activar workflow:
+   • Toggle en la esquina superior derecha (debe quedar en ACTIVO/verde)
+   • Verifica que veas el nodo "Webhook" con URL
+
+
+═══════════════════════════════════════════════════════════════════
+  PASO 2: CONFIGURAR WEBHOOK EN META WHATSAPP (3 minutos)
+═══════════════════════════════════════════════════════════════════
+
+1. Ve a: https://developers.facebook.com/apps
+
+2. Selecciona tu app de WhatsApp Business
+
+3. En el menú izquierdo:
+   WhatsApp → Configuration (o Configuración)
+
+3. En la sección "Webhooks", clic en "Configurar" o "Edit"
+
+4. Configura:
+   
+   URL de devolución de llamada (Callback URL):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ https://agonisingly-unapprehended-vernice.ngrok-free.dev/webhook/whatsapp │
+   └──────────────────────────────────────────────────────────────┘
+   
+   Token de verificación (Verify Token):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ (deja vacío o pon cualquier cosa como "test123")            │
+   └──────────────────────────────────────────────────────────────┘
+
+5. Clic en "Verificar y guardar" (Verify and save)
+   
+   ⚠️ SI DA ERROR:
+   • Verifica que copiaste bien la URL (con /webhook/whatsapp al final)
+   • Verifica que ngrok está corriendo: ps aux | grep ngrok
+   • Revisa logs de n8n: docker compose logs -f n8n
+
+6. Una vez verificado (✅ marca verde):
+   • Busca "Subscribe to webhook fields"
+   • Marca el checkbox "messages"
+   • Clic en "Save" o "Guardar"
+
+
+═══════════════════════════════════════════════════════════════════
+  🧪 PASO 3: PROBAR EL BOT
+═══════════════════════════════════════════════════════════════════
+
+1. En una terminal, ver logs en tiempo real:
+   cd /home/ruben/auto_python/wa-gpt-bridge
+   docker compose logs -f bot
+
+2. Desde tu celular:
+   • Abre WhatsApp
+   • Envía un mensaje al número de tu WhatsApp Business
+   • Mensaje de prueba: "Hola, necesito información"
+
+3. Observa los logs:
+   • Deberías ver: "Processing message from +52XXXXXXXXXX. Provider: gemini"
+   • Luego: "Generated response for +52XXXXXXXXXX"
+
+4. En tu teléfono:
+   • En 15-30 segundos recibirás la respuesta del bot ✅
+
+5. Envía otro mensaje para probar que mantiene contexto:
+   • "Cuéntame más sobre eso"
+   • El bot debe recordar la conversación anterior
+
+
+═══════════════════════════════════════════════════════════════════
+  📊 VERIFICACIONES
+═══════════════════════════════════════════════════════════════════
+
+Health check:
+  curl http://localhost:8000/health | python3 -m json.tool
+
+Estado de servicios:
+  docker compose ps
+
+Ver logs del bot:
+  docker compose logs -f bot
+
+Ver logs de n8n:
+  docker compose logs -f n8n
+
+Verificar ngrok:
+  curl http://127.0.0.1:4040/api/tunnels | python3 -m json.tool
+
+
+═══════════════════════════════════════════════════════════════════
+  🐛 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════
+
+Webhook no verifica en Meta:
+  → Verifica ngrok: curl https://agonisingly-unapprehended-vernice.ngrok-free.dev/webhook/whatsapp
+  → Revisa logs n8n: docker compose logs n8n | tail -50
+
+Bot no responde:
+  → Verifica health: curl http://localhost:8000/health
+  → Ver logs: docker compose logs bot | tail -50
+
+Pierde contexto:
+  → Verifica Redis: docker compose exec redis redis-cli KEYS "conv:*"
+
+
+═══════════════════════════════════════════════════════════════════
+  ℹ️ INFORMACIÓN ADICIONAL
+═══════════════════════════════════════════════════════════════════
+
+• Rate limiting: 10 mensajes por minuto por usuario
+• Límite de contexto: 20 mensajes (últimos 10 pares)
+• TTL de conversaciones: 24 horas
+• LLM provider: Gemini 2.0 Flash
+
+Documentación completa:
+  cat /home/ruben/auto_python/wa-gpt-bridge/DEPLOYMENT.md
+  cat /home/ruben/auto_python/wa-gpt-bridge/TESTING.md
+
+
+═══════════════════════════════════════════════════════════════════
+
+¡Tu pipeline WhatsApp → n8n → Bot → Gemini está listo! 🎉
+

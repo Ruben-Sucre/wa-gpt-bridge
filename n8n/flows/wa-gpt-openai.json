@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "path": "webhook/whatsapp",
+        "path": "whatsapp",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -18,9 +18,8 @@
         "conditions": {
           "string": [
             {
-              "value1": "={{$resumeWebhookUrl}}",
-              "operation": "contains",
-              "value2": "hub.mode"
+              "value1": "={{$json.query[\"hub.mode\"] || ''}}",
+              "operation": "isNotEmpty"
             }
           ]
         }
@@ -33,7 +32,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{$parameter[\"query\"][\"hub.challenge\"]}}",
+        "responseBody": "={{$json.query[\"hub.challenge\"]}}",
         "options": {}
       },
       "name": "Respond Verification",
