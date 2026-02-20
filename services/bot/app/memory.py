@@ -26,12 +26,16 @@ class ConversationMemory:
             return []
         try:
             messages = json.loads(raw)
-            # Return only the last N messages to prevent context overflow and reduce costs
-            if len(messages) > max_messages:
-                return messages[-max_messages:]
-            return messages
         except Exception:
             return []
+
+        if not isinstance(messages, list):
+            raise TypeError("Conversation payload must be a JSON list")
+
+        # Return only the last N messages to prevent context overflow and reduce costs
+        if len(messages) > max_messages:
+            return messages[-max_messages:]
+        return messages
 
     async def append_message(self, conv_id: str, role: str, content: str, max_messages: int = 20):
         conv = await self.get_conversation(conv_id)

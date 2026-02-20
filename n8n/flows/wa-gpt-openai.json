@@ -31,8 +31,8 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{$json.query[\"hub.challenge\"]}}",
+        "respondWith": "text",
+        "responseBody": "={{$json.query[\"hub.challenge\"] || ''}}",
         "options": {}
       },
       "name": "Respond Verification",

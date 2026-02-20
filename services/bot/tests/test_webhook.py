@@ -126,6 +126,22 @@ class TestRateLimiting:
         assert r.json()["delivered"] is False
         assert "rate limit" in r.json()["detail"]
 
+    def test_rate_limit_excedido_no_llama_llm(self, app_client, mocker):
+        """Con rate limit excedido no se debe llamar al proveedor LLM."""
+        from app.main import rate_limiter, llm_client
+        from unittest.mock import AsyncMock
+        rate_limiter.check_rate_limit = AsyncMock(return_value=(False, 11, 10))
+
+        r = app_client.post(
+            "/webhook/whatsapp",
+            json={"from": "521111111111", "text": "hola"},
+            headers={"x-bot-secret": "test-secret"}
+        )
+
+        assert r.status_code == 200
+        assert r.json()["delivered"] is False
+        llm_client.chat.assert_not_awaited()
+
 
 class TestErrorSanitization:
 

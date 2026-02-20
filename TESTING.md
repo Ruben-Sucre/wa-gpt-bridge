@@ -28,15 +28,19 @@ grep -E "^(LLM_PROVIDER|GEMINI_MODEL|WHATSAPP_TOKEN|WHATSAPP_PHONE_ID)=" .env
 #### 1.2 Construir e Iniciar Servicios
 
 ```bash
-# Construir imágenes
-docker-compose build
+# Arranque recomendado (estricto)
+./start.sh
 
-# Iniciar todos los servicios en background
+# Si prefieres manual, construye e inicia servicios
+docker-compose build
 docker-compose up -d
 
 # Verificar que todos están corriendo
 docker-compose ps
 ```
+
+**Nota**: `./start.sh` ahora falla con `exit 1` si ngrok no queda operativo,
+si el dominio activo no coincide, o si `verificar_webhook.sh` no valida el webhook.
 
 **Esperado**: Tres servicios en estado `Up`:
 - `redis`

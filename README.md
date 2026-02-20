@@ -30,9 +30,13 @@ Usuario WhatsApp → Meta WhatsApp Cloud API → ngrok
 Este script hace **en orden**:
 1. `docker compose up -d` — levanta Redis y el Bot
 2. `ngrok http 5678 --domain=...` — expone n8n con dominio fijo
+3. Valida que ngrok esté operativo vía API local (`127.0.0.1:4040`)
+4. Verifica que el dominio activo coincida exactamente con el esperado
+5. Ejecuta `./verificar_webhook.sh` y solo marca éxito si responde correctamente
 
 > ⚠️ **Siempre usa `./start.sh`** en lugar de levantar docker y ngrok por separado.
 > ngrok debe apuntar a n8n (`5678`), el bot (`8000`) queda interno.
+> Si ngrok o el webhook fallan, `start.sh` termina con `exit 1` (modo estricto).
 
 ### URL pública fija (no cambia)
 
@@ -221,6 +225,8 @@ docker compose logs -f bot
 **n8n no recibe webhooks**: Asegúrate de exponer n8n con túnel (ngrok/cloudflare) o servidor público para que Meta pueda alcanzarlo.
 
 **Payload directo de Meta al bot da 403**: Esperado por política. El bot está en modo interno y solo acepta llamadas de n8n con `x-bot-secret`.
+
+**`./start.sh` falla con webhook HTTP 200 y body vacío**: Re-importa `n8n/flows/wa-gpt-openai.json` y vuelve a activar el workflow para aplicar la respuesta de verificación (`hub.challenge`) en texto plano.
 
 ## Hardening operativo (Feb 2026)
 
