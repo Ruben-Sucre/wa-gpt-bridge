@@ -28,6 +28,15 @@ class WhatsAppClient:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(url, json=payload, headers=headers)
             if not r.is_success:
-                logger.error(f"WhatsApp API error {r.status_code}: {r.text}")
+                error_message = None
+                try:
+                    body = r.json()
+                    error_message = body.get("error", {}).get("message")
+                except Exception:
+                    error_message = None
+                if error_message:
+                    logger.error(f"WhatsApp API error {r.status_code}: {error_message}")
+                else:
+                    logger.error(f"WhatsApp API error {r.status_code}")
             r.raise_for_status()
             return r.json()

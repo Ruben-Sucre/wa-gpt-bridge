@@ -234,7 +234,7 @@ Copia esta URL (la usaremos como `NGROK_URL`)
 2. Selecciona tu app → WhatsApp → Configuration (Configuración)
 3. En la sección Webhooks, clic en "Configure" o "Edit"
 4. **Callback URL**: `https://abc123.ngrok-free.app/webhook/whatsapp`
-5. **Verify Token**: Déjalo vacío (n8n lo maneja automáticamente)
+5. **Verify Token**: Usa un valor explícito configurado también en n8n (ej. `WEBHOOK_VERIFY_TOKEN`)
 6. Clic en "Verify and Save"
 
 **Esperado**: ✅ Verificación exitosa (marca verde)

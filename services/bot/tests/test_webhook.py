@@ -2,7 +2,7 @@
 Tests del endpoint GET /webhook/whatsapp — verificación de Meta.
 """
 import pytest
-from tests.conftest import META_PAYLOAD, META_STATUS_PAYLOAD
+from tests.conftest import META_PAYLOAD
 
 
 class TestWebhookVerification:
@@ -13,12 +13,24 @@ class TestWebhookVerification:
             "/webhook/whatsapp",
             params={
                 "hub.mode": "subscribe",
-                "hub.verify_token": "cualquier-cosa",
+                "hub.verify_token": "test-verify-token",
                 "hub.challenge": "ABC123"
             }
         )
         assert r.status_code == 200
         assert r.text == "ABC123"
+
+    def test_verify_token_invalido_devuelve_403(self, app_client):
+        """Con verify token incorrecto el bot rechaza la verificación."""
+        r = app_client.get(
+            "/webhook/whatsapp",
+            params={
+                "hub.mode": "subscribe",
+                "hub.verify_token": "invalido",
+                "hub.challenge": "ABC123"
+            }
+        )
+        assert r.status_code == 403
 
     def test_sin_hub_mode_devuelve_403(self, app_client):
         """Sin hub.mode el bot debe rechazar la verificación."""
@@ -36,52 +48,44 @@ class TestWebhookVerification:
 
 class TestWebhookMensajeEntrante:
 
-    def test_mensaje_meta_procesado_correctamente(self, app_client):
-        """Payload nativo de Meta → bot lo procesa y responde 200 delivered=True."""
-        r = app_client.post("/webhook/whatsapp", json=META_PAYLOAD)
-        assert r.status_code == 200
-        assert r.json()["delivered"] is True
+    def test_mensaje_meta_directo_bloqueado(self, app_client):
+        """Payload directo de Meta se bloquea cuando el bot es interno-only."""
+        r = app_client.post(
+            "/webhook/whatsapp",
+            json=META_PAYLOAD,
+            headers={"x-bot-secret": "test-secret"}
+        )
+        assert r.status_code == 403
 
-    def test_mensaje_meta_llama_llm(self, app_client, mocker):
-        """Verifica que el LLM se llama cuando llega un mensaje."""
+    def test_mensaje_interno_llama_llm(self, app_client, mocker):
+        """Verifica que el LLM se llama para payload interno autorizado."""
         from app.main import llm_client
-        app_client.post("/webhook/whatsapp", json=META_PAYLOAD)
+        app_client.post(
+            "/webhook/whatsapp",
+            json={"from": "521111111111", "text": "hola"},
+            headers={"x-bot-secret": "test-secret"}
+        )
         llm_client.chat.assert_awaited_once()
 
-    def test_mensaje_meta_envia_por_whatsapp(self, app_client, mocker):
+    def test_mensaje_interno_envia_por_whatsapp(self, app_client, mocker):
         """Verifica que se intenta enviar la respuesta por WhatsApp."""
         from app.main import whatsapp_client
-        app_client.post("/webhook/whatsapp", json=META_PAYLOAD)
+        app_client.post(
+            "/webhook/whatsapp",
+            json={"from": "521111111111", "text": "hola"},
+            headers={"x-bot-secret": "test-secret"}
+        )
         whatsapp_client.send_text_message.assert_awaited_once()
-
-    def test_status_update_ignorado_sin_error(self, app_client):
-        """Delivery receipts de Meta no deben causar error — se ignoran silenciosamente."""
-        r = app_client.post("/webhook/whatsapp", json=META_STATUS_PAYLOAD)
-        assert r.status_code == 200
-        assert r.json()["delivered"] is False
-        assert "not a message event" in r.json()["detail"]
-
-    def test_mensaje_tipo_imagen_ignorado(self, app_client):
-        """Mensajes no-texto (imágenes, audio) se ignoran con mensaje claro."""
-        payload = {
-            "object": "whatsapp_business_account",
-            "entry": [{"changes": [{"value": {"messages": [{
-                "from": "5215627698201",
-                "type": "image",
-                "image": {"id": "img123"}
-            }]}}]}]
-        }
-        r = app_client.post("/webhook/whatsapp", json=payload)
-        assert r.status_code == 200
-        assert r.json()["delivered"] is False
-        assert "image" in r.json()["detail"]
 
     def test_json_invalido_devuelve_400(self, app_client):
         """Body que no es JSON devuelve 400."""
         r = app_client.post(
             "/webhook/whatsapp",
             content=b"no soy json",
-            headers={"Content-Type": "application/json"}
+            headers={
+                "Content-Type": "application/json",
+                "x-bot-secret": "test-secret",
+            }
         )
         assert r.status_code == 400
 
@@ -113,10 +117,32 @@ class TestRateLimiting:
         from unittest.mock import AsyncMock
         rate_limiter.check_rate_limit = AsyncMock(return_value=(False, 11, 10))
 
-        r = app_client.post("/webhook/whatsapp", json=META_PAYLOAD)
+        r = app_client.post(
+            "/webhook/whatsapp",
+            json={"from": "521111111111", "text": "hola"},
+            headers={"x-bot-secret": "test-secret"}
+        )
         assert r.status_code == 200
         assert r.json()["delivered"] is False
         assert "rate limit" in r.json()["detail"]
+
+
+class TestErrorSanitization:
+
+    def test_error_no_filtra_detalle_interno(self, app_client, mocker):
+        """Errores de procesamiento no deben filtrar detalles sensibles al cliente."""
+        from app.main import llm_client
+        from unittest.mock import AsyncMock
+        llm_client.chat = AsyncMock(side_effect=RuntimeError("openai key sk-test filtrada"))
+
+        r = app_client.post(
+            "/webhook/whatsapp",
+            json={"from": "521111111111", "text": "hola"},
+            headers={"x-bot-secret": "test-secret"}
+        )
+        assert r.status_code == 200
+        assert r.json()["delivered"] is False
+        assert r.json()["detail"] == "processing failed"
 
 
 class TestHealth:

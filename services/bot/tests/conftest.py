@@ -15,6 +15,8 @@ os.environ.setdefault("GEMINI_MODEL", "gemini-2.0-flash")
 os.environ.setdefault("WHATSAPP_TOKEN", "test-token")
 os.environ.setdefault("WHATSAPP_PHONE_ID", "123456789")
 os.environ.setdefault("BOT_SECRET", "test-secret")
+os.environ.setdefault("WEBHOOK_VERIFY_TOKEN", "test-verify-token")
+os.environ.setdefault("ALLOW_DIRECT_META_WEBHOOK", "false")
 
 
 @pytest.fixture()

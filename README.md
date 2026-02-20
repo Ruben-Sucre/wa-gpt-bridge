@@ -14,7 +14,8 @@ WhatsApp ↔ OpenAI chatbot con orquestación n8n usando FastAPI, Redis y Docker
 
 ```
 Usuario WhatsApp → Meta WhatsApp Cloud API → ngrok
-  → FastAPI Bot (valida, limpia, consulta Redis, llama Gemini/OpenAI, responde)
+  → n8n (webhook público)
+  → FastAPI Bot interno (x-bot-secret, valida, limpia, consulta Redis, llama Gemini/OpenAI)
   → Meta WhatsApp Cloud API → Usuario WhatsApp
 ```
 
@@ -28,10 +29,10 @@ Usuario WhatsApp → Meta WhatsApp Cloud API → ngrok
 
 Este script hace **en orden**:
 1. `docker compose up -d` — levanta Redis y el Bot
-2. `ngrok http 8000 --domain=...` — expone el bot con dominio fijo
+2. `ngrok http 5678 --domain=...` — expone n8n con dominio fijo
 
 > ⚠️ **Siempre usa `./start.sh`** en lugar de levantar docker y ngrok por separado.
-> ngrok debe apuntar al bot (`8000`), no a n8n (`5678`).
+> ngrok debe apuntar a n8n (`5678`), el bot (`8000`) queda interno.
 
 ### URL pública fija (no cambia)
 
@@ -58,7 +59,7 @@ docker compose up -d bot   # recarga el token sin bajar redis
 - ✅ **Rate limiting** - Protección anti-spam (10 mensajes/minuto por usuario)
 - ✅ Validación de webhook de Meta (hub.challenge)
 - ✅ Limpieza de texto y sanitización
-- ✅ Autenticación con header `x-bot-secret`
+- ✅ Autenticación obligatoria con header `x-bot-secret` para llamadas al bot
 - ✅ **Health check mejorado** - Verifica Redis y credenciales de WhatsApp
 - ✅ Envío directo a WhatsApp Cloud API desde FastAPI
 - ✅ Selector de LLM por variable de entorno (OpenAI o Gemini 2.0 Flash)
@@ -100,7 +101,7 @@ curl http://localhost:8000/health
 
 1. Ve a Meta Business Console → WhatsApp → Configuration → Webhooks
 2. URL: `https://tu-dominio.com/webhook/whatsapp` (endpoint de n8n expuesto)
-3. Verify Token: configura el mismo que uses en n8n
+3. Verify Token: configura un valor explícito (ej. `WEBHOOK_VERIFY_TOKEN`) y úsalo igual en Meta/n8n
 4. Suscribe a `messages`
 
 ## Estructura
@@ -154,7 +155,7 @@ Health check del servicio con verificación de dependencias.
 Procesa mensajes de WhatsApp.
 
 **Headers**:
-- `x-bot-secret`: Token de autenticación (opcional, configurable en `.env`)
+- `x-bot-secret`: Token de autenticación (obligatorio, configurable en `.env`)
 
 **Body**:
 ```json
@@ -218,4 +219,14 @@ docker compose logs -f bot
 ```
 
 **n8n no recibe webhooks**: Asegúrate de exponer n8n con túnel (ngrok/cloudflare) o servidor público para que Meta pueda alcanzarlo.
+
+**Payload directo de Meta al bot da 403**: Esperado por política. El bot está en modo interno y solo acepta llamadas de n8n con `x-bot-secret`.
+
+## Hardening operativo (Feb 2026)
+
+- Ingreso público estándar: **Meta → n8n**. El bot es un servicio interno.
+- `x-bot-secret` es **obligatorio** para `POST /webhook/whatsapp`.
+- `WEBHOOK_VERIFY_TOKEN` debe configurarse explícitamente y coincidir entre Meta y n8n.
+- `ALLOW_DIRECT_META_WEBHOOK=false` mantiene bloqueado el acceso directo de Meta al bot.
+- Los logs enmascaran remitentes y los errores externos del bot no exponen detalles internos.
 

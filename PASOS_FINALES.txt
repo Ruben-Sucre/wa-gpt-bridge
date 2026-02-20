@@ -22,7 +22,7 @@
 
 2. Login:
    Usuario: admin
-   Password: ygk4nkeqF_8Q_uikkYl4DYBjJoRmC6E4
+  Password: valor de N8N_BASIC_AUTH_PASSWORD en .env
 
 3. En n8n:
    • Clic en "Workflows" (menú izquierdo)
@@ -60,7 +60,7 @@
    
    Token de verificación (Verify Token):
    ┌──────────────────────────────────────────────────────────────┐
-   │ (deja vacío o pon cualquier cosa como "test123")            │
+  │ Usa WEBHOOK_VERIFY_TOKEN (mismo valor configurado en n8n)    │
    └──────────────────────────────────────────────────────────────┘
 
 5. Clic en "Verificar y guardar" (Verify and save)

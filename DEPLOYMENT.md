@@ -125,7 +125,7 @@ cloudflared tunnel --url http://localhost:5678
    - **URL de devolución de llamada**: `https://TU-URL-PUBLICA/webhook/whatsapp`
      - Ejemplo ngrok: `https://abc123.ngrok-free.app/webhook/whatsapp`
      - Ejemplo dominio: `https://webhook.tudominio.com/webhook/whatsapp`
-   - **Token de verificación**: Deja en blanco o cualquier valor (n8n lo maneja automáticamente)
+   - **Token de verificación**: Usa un valor explícito y consistente entre Meta y n8n (ej. `WEBHOOK_VERIFY_TOKEN`)
 4. Haz clic en **Verificar y guardar**
 5. Meta enviará una petición GET con `hub.mode=subscribe` - n8n responderá automáticamente
 6. Una vez verificado, suscríbete a los campos:
